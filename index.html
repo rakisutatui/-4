@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>検索</title>
+<style>
+  :root { --bg:#f7f8fa; --fg:#1a1d23; --sub:#5b6270; --link:#1a4fd6; --card:#fff; --line:#e2e5ea; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14161a; --fg:#e8eaee; --sub:#9aa1ae; --link:#8fb0ff; --card:#1d2026; --line:#2c3038; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+    font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; }
+  main { max-width: 680px; margin: 0 auto; padding: 32px 16px 64px; }
+  form { display:flex; gap:8px; }
+  input { flex:1; font-size:16px; padding:12px 14px; border:1px solid var(--line);
+    border-radius:10px; background:var(--card); color:var(--fg); }
+  button { font-size:16px; padding:12px 18px; border:0; border-radius:10px;
+    background:var(--link); color:#fff; cursor:pointer; }
+  input:focus-visible, button:focus-visible { outline:2px solid var(--link); outline-offset:2px; }
+  #status { color:var(--sub); margin:20px 0 8px; }
+  .r { background:var(--card); border:1px solid var(--line); border-radius:10px;
+    padding:14px 16px; margin-top:10px; }
+  .r a { color:var(--link); font-size:17px; text-decoration:none; word-break:break-word; }
+  .r a:hover { text-decoration:underline; }
+  .u { color:var(--sub); font-size:13px; margin:2px 0 6px; word-break:break-all; }
+  .s { font-size:15px; line-height:1.6; }
+</style>
+</head>
+<body>
+<main>
+  <form id="f">
+    <input id="q" type="search" placeholder="検索ワードを入力" autofocus autocomplete="off">
+    <button type="submit">検索</button>
+  </form>
+  <div id="status"></div>
+  <div id="out"></div>
+</main>
+<script>
+const f = document.getElementById("f"), q = document.getElementById("q"),
+      st = document.getElementById("status"), out = document.getElementById("out");
+
+async function search(term) {
+  out.textContent = "";
+  st.textContent = "検索中…";
+  try {
+    const res = await fetch("/api/search?q=" + encodeURIComponent(term));
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.status);
+    if (!data.results.length) { st.textContent = "結果が見つかりませんでした。別のキーワードを試してください。"; return; }
+    st.textContent = data.results.length + "件";
+    for (const r of data.results) {
+      const d = document.createElement("div"); d.className = "r";
+      const a = document.createElement("a");
+      a.href = r.url; a.textContent = r.title; a.target = "_blank"; a.rel = "noopener noreferrer";
+      const u = document.createElement("div"); u.className = "u"; u.textContent = r.url;
+      const s = document.createElement("div"); s.className = "s"; s.textContent = r.snippet;
+      d.append(a, u, s); out.append(d);
+    }
+  } catch (e) {
+    st.textContent = "検索に失敗しました。少し待ってからもう一度試してください。(" + e.message + ")";
+  }
+}
+f.addEventListener("submit", e => {
+  e.preventDefault();
+  const t = q.value.trim(); if (!t) return;
+  history.replaceState(null, "", "?q=" + encodeURIComponent(t));
+  search(t);
+});
+const init = new URLSearchParams(location.search).get("q");
+if (init) { q.value = init; search(init); }
+</script>
+</body>
+</html>
