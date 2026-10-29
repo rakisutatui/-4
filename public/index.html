@@ -18,14 +18,21 @@
     border-radius:10px; background:var(--card); color:var(--fg); }
   button { font-size:16px; padding:12px 18px; border:0; border-radius:10px;
     background:var(--link); color:#fff; cursor:pointer; }
-  input:focus-visible, button:focus-visible { outline:2px solid var(--link); outline-offset:2px; }
+  input:focus-visible, button:focus-visible, a:focus-visible { outline:2px solid var(--link); outline-offset:2px; }
   #status { color:var(--sub); margin:20px 0 8px; }
-  .r { background:var(--card); border:1px solid var(--line); border-radius:10px;
-    padding:14px 16px; margin-top:10px; }
-  .r a { color:var(--link); font-size:17px; text-decoration:none; word-break:break-word; }
-  .r a:hover { text-decoration:underline; }
+  .r { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-top:10px; }
+  .r a.t { color:var(--link); font-size:17px; text-decoration:none; word-break:break-word; }
+  .r a.t:hover { text-decoration:underline; }
   .u { color:var(--sub); font-size:13px; margin:2px 0 6px; word-break:break-all; }
   .s { font-size:15px; line-height:1.6; }
+  #reader { position:fixed; inset:0; background:var(--bg); overflow-y:auto; display:none; z-index:10; }
+  #reader.on { display:block; }
+  #bar { position:sticky; top:0; display:flex; gap:8px; align-items:center; justify-content:space-between;
+    padding:10px 16px; background:var(--card); border-bottom:1px solid var(--line); }
+  #bar button { padding:8px 14px; }
+  #bar a { color:var(--link); font-size:14px; }
+  #body { max-width:680px; margin:0 auto; padding:20px 16px 64px; line-height:1.8; font-size:16px;
+    white-space:pre-wrap; word-break:break-word; }
 </style>
 </head>
 <body>
@@ -37,9 +44,15 @@
   <div id="status"></div>
   <div id="out"></div>
 </main>
+<div id="reader" role="dialog" aria-label="ページ本文">
+  <div id="bar"><button id="back" type="button">← 戻る</button><a id="orig" target="_blank" rel="noopener noreferrer">元のサイトを開く</a></div>
+  <div id="body"></div>
+</div>
 <script>
 const f = document.getElementById("f"), q = document.getElementById("q"),
-      st = document.getElementById("status"), out = document.getElementById("out");
+      st = document.getElementById("status"), out = document.getElementById("out"),
+      rd = document.getElementById("reader"), body = document.getElementById("body"),
+      orig = document.getElementById("orig");
 
 async function search(term) {
   out.textContent = "";
@@ -52,8 +65,9 @@ async function search(term) {
     st.textContent = data.results.length + "件";
     for (const r of data.results) {
       const d = document.createElement("div"); d.className = "r";
-      const a = document.createElement("a");
-      a.href = r.url; a.textContent = r.title; a.target = "_blank"; a.rel = "noopener noreferrer";
+      const a = document.createElement("a"); a.className = "t";
+      a.href = r.url; a.textContent = r.title;
+      a.addEventListener("click", e => { e.preventDefault(); openReader(r); });
       const u = document.createElement("div"); u.className = "u"; u.textContent = r.url;
       const s = document.createElement("div"); s.className = "s"; s.textContent = r.snippet;
       d.append(a, u, s); out.append(d);
@@ -62,6 +76,30 @@ async function search(term) {
     st.textContent = "検索に失敗しました。少し待ってからもう一度試してください。(" + e.message + ")";
   }
 }
+
+async function openReader(r) {
+  rd.classList.add("on"); rd.scrollTop = 0;
+  document.body.style.overflow = "hidden";
+  orig.href = r.url;
+  body.textContent = "読み込み中…";
+  try {
+    const res = await fetch("/.netlify/functions/read?url=" + encodeURIComponent(r.url));
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.status);
+    body.textContent = r.title + "\n\n" + tidy(data.text);
+  } catch (e) {
+    body.textContent = "本文を取得できませんでした。右上の「元のサイトを開く」から見てください。(" + e.message + ")";
+  }
+}
+function tidy(t) {
+  return t.replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+          .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+          .replace(/\n{3,}/g, "\n\n").trim();
+}
+document.getElementById("back").addEventListener("click", () => {
+  rd.classList.remove("on"); document.body.style.overflow = "";
+});
+
 f.addEventListener("submit", e => {
   e.preventDefault();
   const t = q.value.trim(); if (!t) return;
